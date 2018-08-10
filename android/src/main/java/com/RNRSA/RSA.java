@@ -2,9 +2,11 @@ package com.RNRSA;
 
 
 import android.content.Context;
+import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
+import android.util.Log;
 
 import org.spongycastle.asn1.ASN1Encodable;
 import org.spongycastle.asn1.ASN1InputStream;
@@ -25,6 +27,7 @@ import java.nio.charset.Charset;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
+import java.security.KeyFactorySpi;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
@@ -38,7 +41,9 @@ import java.security.SignatureException;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 
 import javax.crypto.BadPaddingException;
@@ -53,7 +58,7 @@ import static android.security.keystore.KeyProperties.PURPOSE_VERIFY;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class RSA {
-    private static Charset CharsetUTF_8 = UTF_8;
+    private static Charset CharsetUTF_8;
     private static final String ALGORITHM = "RSA";
     private static final String PUBLIC_HEADER = "RSA PUBLIC KEY";
     private static final String PRIVATE_HEADER = "RSA PRIVATE KEY";
@@ -62,29 +67,36 @@ public class RSA {
     private PublicKey publicKey;
     private PrivateKey privateKey;
 
-    RSA() {}
+    RSA() {
+        this.setCharsetUTF_8();
+    }
+
     RSA(String keyTag) throws KeyStoreException, UnrecoverableEntryException, NoSuchAlgorithmException, IOException, CertificateException {
+        this.setCharsetUTF_8();
         this.keyTag = keyTag;
         this.loadFromKeystore();
     }
 
+    public void setCharsetUTF_8() {
+        CharsetUTF_8 = UTF_8;
+    }
+
     public String getPublicKey() throws IOException {
         //return dataToPem(PUBLIC_HEADER, publicKeyToOaep(this.publicKey));
-        return Base64.encodeToString(this.publicKey.getEncoded(), Base64.DEFAULT);
+        return Base64.encodeToString(this.publicKey.getEncoded(), Base64.NO_WRAP);
     }
 
     public String getPrivateKey() throws IOException {
         //return dataToPem(PRIVATE_HEADER, privateKeyToOaep(this.privateKey));
-        return Base64.encodeToString(this.privateKey.getEncoded(), Base64.DEFAULT);
+        return Base64.encodeToString(this.privateKey.getEncoded(), Base64.NO_WRAP);
     }
 
     public void setPublicKey(String publicKey) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
-        this.publicKey = oaepToPublicKey(publicKey);
+        this.publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(Base64.decode(publicKey, Base64.NO_WRAP)));
     }
 
     public void setPrivateKey(String privateKey) throws IOException, InvalidKeySpecException, NoSuchAlgorithmException {
-        byte[] pkcs1PrivateKey = pemToData(privateKey);
-        this.privateKey = oaepToPrivateKey(pkcs1PrivateKey);
+        this.privateKey = KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(privateKey, Base64.NO_WRAP)));
     }
 
 
@@ -97,16 +109,16 @@ public class RSA {
 
     // Base64 input
     public String encrypt64(String b64Message) throws NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, NoSuchPaddingException, InvalidKeyException {
-        byte[] data = Base64.decode(b64Message, Base64.DEFAULT);
+        byte[] data = Base64.decode(b64Message, Base64.NO_WRAP);
         byte[] cipherBytes = encrypt(data);
-        return Base64.encodeToString(cipherBytes, Base64.DEFAULT);
+        return Base64.encodeToString(cipherBytes, Base64.NO_WRAP);
     }
 
     // UTF-8 input
     public String encrypt(String message) throws NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, NoSuchPaddingException, InvalidKeyException {
         byte[] data = message.getBytes(CharsetUTF_8);
         byte[] cipherBytes = encrypt(data);
-        return Base64.encodeToString(cipherBytes, Base64.DEFAULT);
+        return Base64.encodeToString(cipherBytes, Base64.NO_WRAP);
     }
 
     private byte[] decrypt(byte[] cipherBytes) throws NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, NoSuchPaddingException, InvalidKeyException {
@@ -117,16 +129,16 @@ public class RSA {
 
     // UTF-8 input
     public String decrypt(String message) throws NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, NoSuchPaddingException, InvalidKeyException {
-        byte[] cipherBytes = Base64.decode(message, Base64.DEFAULT);
+        byte[] cipherBytes = Base64.decode(message, Base64.NO_WRAP);
         byte[] data = decrypt(cipherBytes);
         return new String(data, CharsetUTF_8);
     }
 
     // Base64 input
     public String decrypt64(String b64message) throws NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, NoSuchPaddingException, InvalidKeyException {
-        byte[] cipherBytes = Base64.decode(b64message, Base64.DEFAULT);
+        byte[] cipherBytes = Base64.decode(b64message, Base64.NO_WRAP);
         byte[] data = decrypt(cipherBytes);
-        return Base64.encodeToString(data, Base64.DEFAULT);
+        return Base64.encodeToString(data, Base64.NO_WRAP);
     }
 
     private String sign(byte[] messageBytes) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
@@ -134,12 +146,12 @@ public class RSA {
         privateSignature.initSign(this.privateKey);
         privateSignature.update(messageBytes);
         byte[] signature = privateSignature.sign();
-        return Base64.encodeToString(signature, Base64.DEFAULT);
+        return Base64.encodeToString(signature, Base64.NO_WRAP);
     }
 
     // b64 message
     public String sign64(String b64message) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
-        byte[] messageBytes = Base64.decode(b64message, Base64.DEFAULT);
+        byte[] messageBytes = Base64.decode(b64message, Base64.NO_WRAP);
         return sign(messageBytes);
     }
 
@@ -160,8 +172,8 @@ public class RSA {
     public boolean verify64(String signature, String message) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
         Signature publicSignature = Signature.getInstance("SHA256withRSA");
         publicSignature.initVerify(this.publicKey);
-        byte[] messageBytes = Base64.decode(message, Base64.DEFAULT);
-        byte[] signatureBytes = Base64.decode(signature, Base64.DEFAULT);
+        byte[] messageBytes = Base64.decode(message, Base64.NO_WRAP);
+        byte[] signatureBytes = Base64.decode(signature, Base64.NO_WRAP);
         return verify(signatureBytes, messageBytes);
     }
 
@@ -170,7 +182,7 @@ public class RSA {
         Signature publicSignature = Signature.getInstance("SHA256withRSA");
         publicSignature.initVerify(this.publicKey);
         byte[] messageBytes = message.getBytes(CharsetUTF_8);
-        byte[] signatureBytes = Base64.decode(signature, Base64.DEFAULT);
+        byte[] signatureBytes = Base64.decode(signature, Base64.NO_WRAP);
         return verify(signatureBytes, messageBytes);
     }
 
@@ -231,7 +243,7 @@ public class RSA {
         KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
         keyStore.load(null);
         KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry) keyStore.getEntry(this.keyTag, null);
-        
+
         if (privateKeyEntry != null) {
             this.privateKey = privateKeyEntry.getPrivateKey();
             this.publicKey = privateKeyEntry.getCertificate().getPublicKey();
@@ -265,17 +277,19 @@ public class RSA {
 
     public void generate(String keyTag, int keySize, Context context) throws NoSuchAlgorithmException, InvalidAlgorithmParameterException, NoSuchProviderException {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance(ALGORITHM, "AndroidKeyStore");
-        kpg.initialize(
-            new KeyGenParameterSpec.Builder(
-                keyTag,
-                PURPOSE_ENCRYPT | PURPOSE_DECRYPT | PURPOSE_SIGN | PURPOSE_VERIFY
-            )
-            .setKeySize(keySize)
-            .setDigests(KeyProperties.DIGEST_SHA256)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
-            //.setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
-            .build()
-        );
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            kpg.initialize(
+                new KeyGenParameterSpec.Builder(
+                    keyTag,
+                    PURPOSE_ENCRYPT | PURPOSE_DECRYPT | PURPOSE_SIGN | PURPOSE_VERIFY
+                )
+                .setKeySize(keySize)
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
+                //.setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .build()
+            );
+        }
 
         KeyPair keyPair = kpg.genKeyPair();
         this.publicKey = keyPair.getPublic();

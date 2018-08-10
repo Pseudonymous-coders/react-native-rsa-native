@@ -17,7 +17,6 @@ public class RNRSAPackage implements ReactPackage {
       return Arrays.<NativeModule>asList(new RNRSAModule(reactContext), new RNRSAKeychainModule((reactContext)));
     }
 
-    @Override
     public List<Class<? extends JavaScriptModule>> createJSModules() {
       return Collections.emptyList();
     }
