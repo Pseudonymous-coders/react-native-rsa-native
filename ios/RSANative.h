@@ -18,8 +18,6 @@
 - (void)generate:(int)keySize;
 - (void)deletePrivateKey;
 
-- (size_t) encodeLength:(unsigned char *)buf length:(size_t) length;
-
 - (NSString *)encodedPublicKey;
 - (NSString *)encodedPrivateKey;
 

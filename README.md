@@ -2,7 +2,7 @@
 
 A native implementation of RSA key generation and encryption/decryption, sign/verify.
 Keychain implementation
-Implementation is in PKCS1
+This implementation specifically uses OAEP SHA256 with MGF1 Padding
 
 ## Support
 
@@ -15,19 +15,16 @@ Features:
 Generation, 
 Encryption, 
 Decryption, 
-Sign, 
-Verify, 
-Keychain support
+
+Not currently features:
+Sign,
+Verify
 
 ## Getting started
 
-`$ yarn add react-native-rsa-native`
+`$ yarn add https://github.com/Pseudonymous-coders/react-native-rsa-native`
 
-or:
-
-`$ npm install react-native-rsa-native --save`
-
-### Mostly automatic installation:
+### Automatic installation:
 
 `$ react-native link react-native-rsa-native`
 
