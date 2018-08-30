@@ -14,6 +14,23 @@ typedef void (^SecKeyPerformBlock)(SecKeyRef key);
 
 @implementation RSANative
 
+// Found this amazing ANS1 encoding example from https://blog.wingsofhermes.org/?p=42
+size_t encodeLength(unsigned char * buf, size_t length) {
+    if(length < 128) {
+        buf[0] = length;
+        return 1;
+    }
+    
+    size_t i = (length / 256) + 1;
+    buf[0] = i + 0x80;
+    for(size_t j = 0; j < i; ++j) {
+        buf[i - j] = length & 0xFF;
+        length = length >> 8;
+    }
+    
+    return i + 1;
+}
+
 - (instancetype)initWithKeyTag:(NSString *)keyTag {
     self = [super init];
     if (self) {
@@ -35,7 +52,7 @@ typedef void (^SecKeyPerformBlock)(SecKeyRef key);
 	NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init]; 
     [attributes setObject:(__bridge id)kSecAttrKeyTypeRSA forKey:(__bridge id)kSecAttrKeyType];
     [attributes setObject:[NSNumber numberWithInt:keySize] forKey:(__bridge id)kSecAttrKeySizeInBits];
-	[attributes setObject:privateKeyAttributes forKey:(__bridge id)kSecPrivateKeyAttrs]; 
+	[attributes setObject:privateKeyAttributes forKey:(__bridge id)kSecPrivateKeyAttrs];
 
     CFErrorRef error = NULL;
     SecKeyRef privateKey = SecKeyCreateRandomKey((__bridge CFDictionaryRef)attributes, &error);
@@ -50,6 +67,26 @@ typedef void (^SecKeyPerformBlock)(SecKeyRef key);
         _publicKeyRef = SecKeyCopyPublicKey(privateKey);
     }
 }
+
+/*- (NSString *) encodeANSIKey {
+    static const unsigned char _encodedOID[15] = {
+        0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+        0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
+    };
+    
+    NSData *publicTag = [NSData dataWithBytes:PUBLIC_KEY_TAG length:strlen((const char *) PUBLIC_KEY_TAG)];
+    
+    NSMutableDictionary *publicKeyQuery = [[NSMutableDictionary alloc] init];
+    [publicKeyQuery setObject:(id)kSecClassKey forKey:(id)kSecClass];
+    [publicKeyQuery setObject:publicTag forKey:(id)kSecAttrApplicationTag];
+    [publicKeyQuery setObject:(id)kSecAttrKeyTypeRSA forKey:(id)kSecAttrKeyType];
+    [publicKeyQuery setObject:[NSNumber numberWithBool:YES] forKey:(id)kSecReturnData];
+    
+    NSData *publicKeyBits;
+    //OSStatus err = SecItemCopyMatching((CFDictionaryRef) publicKeyQuery, (CFTypeRef *)&publicKeyBits);
+    
+    return NULL;
+}*/
 
 - (void)deletePrivateKey {
     if (self.keyTag) {
@@ -140,7 +177,7 @@ typedef void (^SecKeyPerformBlock)(SecKeyRef key);
     NSData *data = [message dataUsingEncoding:NSUTF8StringEncoding];
     //NSData *data = [[NSData alloc] initWithBase64EncodedString:message options:NSDataBase64DecodingIgnoreUnknownCharacters];
     NSData *encrypted = [self _encrypt: data];
-    return [encrypted base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+    return [encrypted base64EncodedStringWithOptions:0];
 }
 
 - (NSData *)_encrypt:(NSData *)data {
@@ -340,7 +377,42 @@ typedef void (^SecKeyPerformBlock)(SecKeyRef key);
 
 - (NSString *) externalRepresentationForPublicKey:(SecKeyRef)key {
     NSData *keyData = [self dataForKey:key];
-    return [keyData base64EncodedStringWithOptions:0];
+    unsigned char builder[15];
+    NSMutableData * encKey = [[NSMutableData alloc] init];
+    int bitstringEncLength;
+    
+    // When we get to the bitstring - how will we encode it?
+    if  ([keyData length ] + 1  < 128 )
+        bitstringEncLength = 1 ;
+    else
+        bitstringEncLength = (([keyData length ] +1 ) / 256 ) + 2 ;
+    
+    static const unsigned char encodedOID[15] = {
+        0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+        0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
+    };
+    
+    // Overall we have a sequence of a certain length
+    builder[0] = 0x30;    // ASN.1 encoding representing a SEQUENCE
+    // Build up overall size made up of -
+    // size of OID + size of bitstring encoding + size of actual key
+    size_t i = sizeof(encodedOID) + 2 + bitstringEncLength + [keyData length];
+    size_t j = encodeLength(&builder[1], i);
+    [encKey appendBytes:builder length:j +1];
+    
+    // First part of the sequence is the OID
+    [encKey appendBytes:encodedOID length:sizeof(encodedOID)];
+    
+    // Now add the bitstring
+    builder[0] = 0x03;
+    j = encodeLength(&builder[1], [keyData length] + 1);
+    builder[j+1] = 0x00;
+    [encKey appendBytes:builder length:j + 2];
+    
+    // Now the actual key
+    [encKey appendData:keyData];
+
+    return [encKey base64EncodedStringWithOptions:0];
 }
 
 - (NSString *) externalRepresentationForPrivateKey:(SecKeyRef)key {
